@@ -1,0 +1,61 @@
+<template>
+  <div class="min-h-screen bg-gray-100 py-6 flex flex-col justify-center sm:py-12">
+    <div class="relative py-3 sm:max-w-xl sm:mx-auto">
+      <div class="absolute inset-0 bg-gradient-to-r from-blue-400 to-blue-600 shadow-lg transform -skew-y-6 sm:skew-y-0 sm:-rotate-6 sm:rounded-3xl"></div>
+      <div class="relative px-4 py-10 bg-white shadow-lg sm:rounded-3xl sm:p-20">
+        <div class="max-w-md mx-auto">
+          <div class="text-center">
+            <h1 class="text-3xl font-extrabold text-gray-900">LiftLogic</h1>
+            <p class="mt-2 text-sm text-gray-500">Smart warm-up calculator for strength training</p>
+          </div>
+          
+          <div class="divide-y divide-gray-200">
+            <div class="py-8 text-base leading-6 space-y-4 text-gray-700 sm:text-lg sm:leading-7">
+              <div class="flex flex-col">
+                <label class="text-gray-700 font-bold mb-2">Working Weight (lbs/kg)</label>
+                <input type="number" value.bind="currentWeight" input.trigger="calculateRMs()" 
+                  class="px-3 py-2 bg-white border shadow-sm border-gray-300 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-blue-500 block w-full rounded-md sm:text-sm focus:ring-1" />
+              </div>
+              
+              <div class="mt-6 pt-6 border-t border-gray-200">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Results</h2>
+                
+                <div class="space-y-4">
+                  <!-- First Warm-Up Set -->
+                  <div class="bg-blue-50 p-4 rounded-lg">
+                    <h3 class="font-semibold">First Warm-Up (${FIRST_WARMUP_REPS} reps)</h3>
+                    <div class="text-lg">${roundToPlate(thirtyRM)} lbs/kg <span class="text-gray-500 text-sm">(30RM)</span></div>
+                  </div>
+                  
+                  <!-- Second Warm-Up Set -->
+                  <div class="bg-blue-100 p-4 rounded-lg">
+                    <h3 class="font-semibold">Second Warm-Up (${SECOND_WARMUP_REPS} reps)</h3>
+                    <div class="text-lg">${roundToPlate(twentyRM)} lbs/kg <span class="text-gray-500 text-sm">(20RM)</span></div>
+                  </div>
+                  
+                  <!-- Third Warm-Up Set -->
+                  <div class="bg-blue-200 p-4 rounded-lg">
+                    <h3 class="font-semibold">Third Warm-Up (${THIRD_WARMUP_REPS} reps)</h3>
+                    <div class="text-lg">${roundToPlate(tenRM)} lbs/kg <span class="text-gray-500 text-sm">(10RM)</span></div>
+                  </div>
+                  
+                  <!-- Working Set -->
+                  <div class="bg-blue-300 p-4 rounded-lg">
+                    <h3 class="font-semibold">Working Set</h3>
+                    <div class="text-lg">${currentWeight} lbs/kg</div>
+                  </div>
+                  
+                  <!-- Estimated 1RM -->
+                  <div class="bg-blue-400 p-4 rounded-lg text-white">
+                    <h3 class="font-semibold">Estimated 1RM</h3>
+                    <div class="text-lg">${roundToPlate(oneRM)} lbs/kg</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
