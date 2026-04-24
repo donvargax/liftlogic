@@ -93,8 +93,8 @@ describe('LiftLogic Calculator', () => {
     expect(app.workoutDays).toHaveLength(4);
     expect(app.activeDay.title).toBe('Day 1');
     expect(app.activeDay.subtitle).toBe('Torso A');
-    expect(app.workoutDays[1].exercises.map(exercise => exercise.name)).toContain('Kneeling Cable Crunch');
-    expect(app.workoutDays[0].exercises.every(exercise => exercise.completed === false)).toBe(true);
+    expect(app.workoutDays[1].exercises.map(item => item.name)).toContain('Kneeling Cable Crunch');
+    expect(app.workoutDays[0].exercises.every(item => item.completed === false)).toBe(true);
   });
 
   it('should persist workout entries to localStorage', () => {
