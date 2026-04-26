@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/app';
 
 describe('LiftLogic Calculator', () => {
@@ -99,11 +99,12 @@ describe('LiftLogic Calculator', () => {
 
   it('should persist workout entries to localStorage', () => {
     app.selectDay(2);
-    app.workoutDays[2].exercises[0].weight = '160';
-    app.workoutDays[2].exercises[0].sets = '3';
-    app.workoutDays[2].exercises[0].reps = '8';
-    app.workoutDays[2].exercises[0].completed = true;
-    app.saveWorkoutData();
+    app.workoutDayDrafts[2].exercises[0].weight = '160';
+    app.workoutDayDrafts[2].exercises[0].sets = '3';
+    app.workoutDayDrafts[2].exercises[0].reps = '8';
+    app.workoutDayDrafts[2].exercises[0].completed = true;
+    app.markWorkoutFormDirty(app.workoutDays[2].id);
+    app.saveWorkoutForm();
 
     const restoredApp = new App();
 
@@ -115,16 +116,16 @@ describe('LiftLogic Calculator', () => {
   });
 
   it('should prompt for a backup when the active day is fully completed', () => {
-    const day = app.activeDay;
+    const lastExerciseIndex = app.activeDayDraft.exercises.length - 1;
 
-    day.exercises.forEach((exercise, index) => {
-      exercise.completed = index !== day.exercises.length - 1;
+    app.activeDayDraft.exercises.forEach((exercise, index) => {
+      exercise.completed = index !== lastExerciseIndex;
     });
-    app.handleCompletionChange(day);
+    app.handleCompletionChange();
     expect(app.backupPromptOpen).toBe(false);
 
-    day.exercises[day.exercises.length - 1].completed = true;
-    app.handleCompletionChange(day);
+    app.activeDayDraft.exercises[lastExerciseIndex].completed = true;
+    app.handleCompletionChange();
 
     expect(app.backupPromptOpen).toBe(true);
     expect(app.backupPromptDayTitle).toBe('Day 1');
@@ -132,10 +133,12 @@ describe('LiftLogic Calculator', () => {
 
   it('should import exported workout data', () => {
     app.selectDay(1);
-    app.workoutDays[1].exercises[0].weight = '225';
-    app.workoutDays[1].exercises[0].sets = '4';
-    app.workoutDays[1].exercises[0].reps = '6';
-    app.workoutDays[1].exercises[0].completed = true;
+    app.workoutDayDrafts[1].exercises[0].weight = '225';
+    app.workoutDayDrafts[1].exercises[0].sets = '4';
+    app.workoutDayDrafts[1].exercises[0].reps = '6';
+    app.workoutDayDrafts[1].exercises[0].completed = true;
+    app.markWorkoutFormDirty(app.workoutDays[1].id);
+    app.saveWorkoutForm(false);
 
     const backup = app.serializeWorkoutData();
     const importedApp = new App();
@@ -146,6 +149,37 @@ describe('LiftLogic Calculator', () => {
     expect(importedApp.workoutDays[1].exercises[0].sets).toBe('4');
     expect(importedApp.workoutDays[1].exercises[0].reps).toBe('6');
     expect(importedApp.workoutDays[1].exercises[0].completed).toBe(true);
-    expect(importedApp.importStatusTone).toBe('success');
+    expect(importedApp.statusTone).toBe('success');
+  });
+
+  it('should keep draft changes in memory until the workout form is saved', () => {
+    app.activeDayDraft.exercises[0].weight = '185';
+    app.markWorkoutFormDirty();
+
+    expect(app.activeDay.exercises[0].weight).toBe('');
+    expect(app.isDayDirty(app.activeDay)).toBe(true);
+  });
+
+  it('should handle localStorage write failures gracefully', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+
+    app.activeDayDraft.exercises[0].weight = '185';
+    app.markWorkoutFormDirty();
+
+    expect(app.saveWorkoutForm()).toBe(false);
+    expect(app.statusTone).toBe('error');
+  });
+
+  it('should handle localStorage read failures gracefully', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+
+    const restoredApp = new App();
+
+    expect(restoredApp.workoutDays).toHaveLength(4);
+    expect(restoredApp.activeDay.title).toBe('Day 1');
   });
 });

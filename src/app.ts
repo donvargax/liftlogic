@@ -103,6 +103,13 @@ function createDefaultWorkoutState(): WorkoutState {
   };
 }
 
+function cloneWorkoutDay(day: WorkoutDay): WorkoutDay {
+  return {
+    ...day,
+    exercises: day.exercises.map(exercise => ({ ...exercise })),
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -172,11 +179,15 @@ export class App {
   thirtyRM: number = 0;
   activeDayIndex: number = 0;
   workoutDays: WorkoutDay[] = [];
+  workoutDayDrafts: WorkoutDay[] = [];
+  dirtyDayIds: string[] = [];
   backupPromptOpen = false;
   backupPromptDayTitle = '';
-  importStatus = '';
-  importStatusTone: 'success' | 'error' | '' = '';
+  statusMessage = '';
+  statusTone: 'success' | 'error' | '' = '';
   importInput?: HTMLInputElement;
+  backupDialog?: HTMLDivElement;
+  backupPrimaryAction?: HTMLButtonElement;
 
   readonly FIRST_WARMUP_REPS = 12;
   readonly SECOND_WARMUP_REPS = 8;
@@ -189,6 +200,14 @@ export class App {
 
   get activeDay(): WorkoutDay {
     return this.workoutDays[this.activeDayIndex] ?? this.workoutDays[0];
+  }
+
+  get activeDayDraft(): WorkoutDay {
+    return this.workoutDayDrafts[this.activeDayIndex] ?? this.workoutDayDrafts[0];
+  }
+
+  get activeDayIsDirty(): boolean {
+    return this.dirtyDayIds.includes(this.activeDay.id);
   }
 
   calculateRMs() {
@@ -207,33 +226,73 @@ export class App {
 
   selectDay(index: number) {
     this.activeDayIndex = index;
-    this.saveWorkoutData();
+    this.persistWorkoutState();
   }
 
-  saveWorkoutData() {
-    if (typeof localStorage === 'undefined') {
-      return;
+  markWorkoutFormDirty(dayId: string = this.activeDay.id) {
+    if (!this.dirtyDayIds.includes(dayId)) {
+      this.dirtyDayIds = [...this.dirtyDayIds, dayId];
+    }
+  }
+
+  isDayDirty(day: WorkoutDay): boolean {
+    return this.dirtyDayIds.includes(day.id);
+  }
+
+  saveWorkoutForm(showStatus: boolean = true): boolean {
+    this.commitDraftForDay(this.activeDayIndex);
+    const persisted = this.persistWorkoutState();
+
+    if (persisted) {
+      this.clearDirtyDay(this.activeDay.id);
+      if (showStatus) {
+        this.statusMessage = 'Workout data saved locally.';
+        this.statusTone = 'success';
+      }
+    } else if (showStatus) {
+      this.statusMessage = 'Could not save workout data locally.';
+      this.statusTone = 'error';
     }
 
-    localStorage.setItem(
-      WORKOUT_STORAGE_KEY,
-      JSON.stringify({
-        activeDayIndex: this.activeDayIndex,
-        days: this.workoutDays,
-      }),
-    );
+    return persisted;
   }
 
-  handleCompletionChange(day: WorkoutDay) {
-    this.saveWorkoutData();
+  submitWorkoutForm(event: Event) {
+    event.preventDefault();
+    this.saveWorkoutForm();
+  }
 
-    if (this.isDayComplete(day)) {
-      this.openBackupPrompt(day.title);
+  persistWorkoutState(): boolean {
+    if (typeof localStorage === 'undefined') {
+      return true;
+    }
+
+    try {
+      localStorage.setItem(
+        WORKOUT_STORAGE_KEY,
+        JSON.stringify({
+          activeDayIndex: this.activeDayIndex,
+          days: this.workoutDays,
+        }),
+      );
+      return true;
+    } catch {
+      this.statusMessage = 'Could not save workout data locally.';
+      this.statusTone = 'error';
+      return false;
+    }
+  }
+
+  handleCompletionChange() {
+    this.saveWorkoutForm(false);
+
+    if (this.isDayComplete(this.activeDay)) {
+      this.openBackupPrompt(this.activeDay.title);
     }
   }
 
   finishSession() {
-    this.saveWorkoutData();
+    this.saveWorkoutForm(false);
     this.openBackupPrompt(this.activeDay.title);
   }
 
@@ -261,6 +320,10 @@ export class App {
   }
 
   exportData(filename: string = 'liftlogic-workout-data.json'): string {
+    if (this.isDayDirty(this.activeDay)) {
+      this.saveWorkoutForm(false);
+    }
+
     const data = this.serializeWorkoutData();
 
     if (typeof document !== 'undefined' && typeof URL.createObjectURL === 'function') {
@@ -270,11 +333,11 @@ export class App {
       link.href = url;
       link.download = filename;
       link.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 0);
     }
 
-    this.importStatus = 'Workout data exported.';
-    this.importStatusTone = 'success';
+    this.statusMessage = 'Workout data exported.';
+    this.statusTone = 'success';
     return data;
   }
 
@@ -314,13 +377,13 @@ export class App {
       }
 
       this.applyWorkoutState(nextState);
-      this.saveWorkoutData();
-      this.importStatus = 'Workout data imported.';
-      this.importStatusTone = 'success';
+      this.persistWorkoutState();
+      this.statusMessage = 'Workout data imported.';
+      this.statusTone = 'success';
       return true;
     } catch {
-      this.importStatus = 'Could not import that backup file.';
-      this.importStatusTone = 'error';
+      this.statusMessage = 'Could not import that backup file.';
+      this.statusTone = 'error';
       return false;
     }
   }
@@ -333,6 +396,8 @@ export class App {
   private applyWorkoutState(state: WorkoutState) {
     this.activeDayIndex = state.activeDayIndex;
     this.workoutDays = state.days;
+    this.workoutDayDrafts = state.days.map(day => cloneWorkoutDay(day));
+    this.dirtyDayIds = [];
   }
 
   private loadWorkoutState(): WorkoutState {
@@ -340,12 +405,12 @@ export class App {
       return createDefaultWorkoutState();
     }
 
-    const savedState = localStorage.getItem(WORKOUT_STORAGE_KEY);
-    if (!savedState) {
-      return createDefaultWorkoutState();
-    }
-
     try {
+      const savedState = localStorage.getItem(WORKOUT_STORAGE_KEY);
+      if (!savedState) {
+        return createDefaultWorkoutState();
+      }
+
       return sanitizeWorkoutState(JSON.parse(savedState)) ?? createDefaultWorkoutState();
     } catch {
       return createDefaultWorkoutState();
@@ -355,5 +420,55 @@ export class App {
   private openBackupPrompt(dayTitle: string) {
     this.backupPromptDayTitle = dayTitle;
     this.backupPromptOpen = true;
+    this.focusBackupPrompt();
+  }
+
+  private commitDraftForDay(dayIndex: number) {
+    const savedDay = this.workoutDays[dayIndex];
+    const draftDay = this.workoutDayDrafts[dayIndex];
+
+    if (!savedDay || !draftDay) {
+      return;
+    }
+
+    this.workoutDays[dayIndex] = {
+      ...savedDay,
+      exercises: savedDay.exercises.map((exercise, exerciseIndex) => ({
+        ...exercise,
+        weight: draftDay.exercises[exerciseIndex]?.weight ?? '',
+        sets: draftDay.exercises[exerciseIndex]?.sets ?? '',
+        reps: draftDay.exercises[exerciseIndex]?.reps ?? '',
+        completed: draftDay.exercises[exerciseIndex]?.completed ?? false,
+      })),
+    };
+    this.workoutDayDrafts[dayIndex] = cloneWorkoutDay(this.workoutDays[dayIndex]);
+  }
+
+  private clearDirtyDay(dayId: string) {
+    this.dirtyDayIds = this.dirtyDayIds.filter(id => id !== dayId);
+  }
+
+  private focusBackupPrompt() {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const focusTarget = () => {
+      this.backupPrimaryAction?.focus();
+      if (document.activeElement !== this.backupPrimaryAction) {
+        this.backupDialog?.focus();
+      }
+    };
+
+    setTimeout(() => {
+      focusTarget();
+      if (
+        document.activeElement !== this.backupPrimaryAction &&
+        document.activeElement !== this.backupDialog &&
+        typeof requestAnimationFrame === 'function'
+      ) {
+        requestAnimationFrame(focusTarget);
+      }
+    }, 0);
   }
 }
