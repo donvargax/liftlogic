@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/app';
 
 describe('LiftLogic Calculator', () => {
   let app: App;
 
   beforeEach(() => {
+    localStorage.clear();
     app = new App();
   });
 
@@ -86,5 +87,99 @@ describe('LiftLogic Calculator', () => {
     expect(app.roundToPlate(103.7)).toBe(105);
     expect(app.roundToPlate(99.9)).toBe(100);
     expect(app.roundToPlate(98.7)).toBe(100);
+  });
+
+  it('should initialize the default 4-day workout tracker', () => {
+    expect(app.workoutDays).toHaveLength(4);
+    expect(app.activeDay.title).toBe('Day 1');
+    expect(app.activeDay.subtitle).toBe('Torso A');
+    expect(app.workoutDays[1].exercises.map(item => item.name)).toContain('Kneeling Cable Crunch');
+    expect(app.workoutDays[0].exercises.every(item => item.completed === false)).toBe(true);
+  });
+
+  it('should persist workout entries to localStorage', () => {
+    app.selectDay(2);
+    app.workoutDayDrafts[2].exercises[0].weight = '160';
+    app.workoutDayDrafts[2].exercises[0].sets = '3';
+    app.workoutDayDrafts[2].exercises[0].reps = '8';
+    app.workoutDayDrafts[2].exercises[0].completed = true;
+    app.markWorkoutFormDirty(app.workoutDays[2].id);
+    app.saveWorkoutForm();
+
+    const restoredApp = new App();
+
+    expect(restoredApp.activeDayIndex).toBe(2);
+    expect(restoredApp.workoutDays[2].exercises[0].weight).toBe('160');
+    expect(restoredApp.workoutDays[2].exercises[0].sets).toBe('3');
+    expect(restoredApp.workoutDays[2].exercises[0].reps).toBe('8');
+    expect(restoredApp.workoutDays[2].exercises[0].completed).toBe(true);
+  });
+
+  it('should prompt for a backup when the active day is fully completed', () => {
+    const lastExerciseIndex = app.activeDayDraft.exercises.length - 1;
+
+    app.activeDayDraft.exercises.forEach((exercise, index) => {
+      exercise.completed = index !== lastExerciseIndex;
+    });
+    app.handleCompletionChange();
+    expect(app.backupPromptOpen).toBe(false);
+
+    app.activeDayDraft.exercises[lastExerciseIndex].completed = true;
+    app.handleCompletionChange();
+
+    expect(app.backupPromptOpen).toBe(true);
+    expect(app.backupPromptDayTitle).toBe('Day 1');
+  });
+
+  it('should import exported workout data', () => {
+    app.selectDay(1);
+    app.workoutDayDrafts[1].exercises[0].weight = '225';
+    app.workoutDayDrafts[1].exercises[0].sets = '4';
+    app.workoutDayDrafts[1].exercises[0].reps = '6';
+    app.workoutDayDrafts[1].exercises[0].completed = true;
+    app.markWorkoutFormDirty(app.workoutDays[1].id);
+    app.saveWorkoutForm(false);
+
+    const backup = app.serializeWorkoutData();
+    const importedApp = new App();
+
+    expect(importedApp.importWorkoutData(backup)).toBe(true);
+    expect(importedApp.activeDayIndex).toBe(1);
+    expect(importedApp.workoutDays[1].exercises[0].weight).toBe('225');
+    expect(importedApp.workoutDays[1].exercises[0].sets).toBe('4');
+    expect(importedApp.workoutDays[1].exercises[0].reps).toBe('6');
+    expect(importedApp.workoutDays[1].exercises[0].completed).toBe(true);
+    expect(importedApp.statusTone).toBe('success');
+  });
+
+  it('should keep draft changes in memory until the workout form is saved', () => {
+    app.activeDayDraft.exercises[0].weight = '185';
+    app.markWorkoutFormDirty();
+
+    expect(app.activeDay.exercises[0].weight).toBe('');
+    expect(app.isDayDirty(app.activeDay)).toBe(true);
+  });
+
+  it('should handle localStorage write failures gracefully', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+
+    app.activeDayDraft.exercises[0].weight = '185';
+    app.markWorkoutFormDirty();
+
+    expect(app.saveWorkoutForm()).toBe(false);
+    expect(app.statusTone).toBe('error');
+  });
+
+  it('should handle localStorage read failures gracefully', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+
+    const restoredApp = new App();
+
+    expect(restoredApp.workoutDays).toHaveLength(4);
+    expect(restoredApp.activeDay.title).toBe('Day 1');
   });
 });
