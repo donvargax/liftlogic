@@ -9,6 +9,7 @@ export default mergeConfig(
       environment: "jsdom",
       watch: false,
       root: fileURLToPath(new URL("./", import.meta.url)),
+      include: ["test/**/*.spec.ts"],
       setupFiles: ["./test/setup.ts"]
     },
   }),
