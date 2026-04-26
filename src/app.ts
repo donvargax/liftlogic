@@ -249,9 +249,6 @@ export class App {
         this.statusMessage = 'Workout data saved locally.';
         this.statusTone = 'success';
       }
-    } else if (showStatus) {
-      this.statusMessage = 'Could not save workout data locally.';
-      this.statusTone = 'error';
     }
 
     return persisted;
@@ -291,7 +288,7 @@ export class App {
     }
   }
 
-  finishSession() {
+  finishRoutine() {
     this.saveWorkoutForm(false);
     this.openBackupPrompt(this.activeDay.title);
   }
@@ -333,7 +330,7 @@ export class App {
       link.href = url;
       link.download = filename;
       link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
     }
 
     this.statusMessage = 'Workout data exported.';
@@ -460,15 +457,10 @@ export class App {
       }
     };
 
-    setTimeout(() => {
-      focusTarget();
-      if (
-        document.activeElement !== this.backupPrimaryAction &&
-        document.activeElement !== this.backupDialog &&
-        typeof requestAnimationFrame === 'function'
-      ) {
-        requestAnimationFrame(focusTarget);
-      }
-    }, 0);
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(focusTarget);
+    } else {
+      setTimeout(focusTarget, 0);
+    }
   }
 }
