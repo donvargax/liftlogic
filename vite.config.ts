@@ -4,6 +4,7 @@ import aurelia from '@aurelia/vite-plugin';
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
+  base: process.env.VITE_BASE,
   server: {
     open: !process.env.CI,
     port: 9000,
