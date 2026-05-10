@@ -1,14 +1,13 @@
 name: Deploy PR previews
 
 on:
-  push:
   pull_request:
     types:
       - opened
       - reopened
       - synchronize
       - closed
-  workflow_dispatch:
+  workflow_dispatch: 
 
 concurrency:
   group: preview-${{ github.ref }}
